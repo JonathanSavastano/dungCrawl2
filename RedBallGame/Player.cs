@@ -20,25 +20,16 @@ public enum StatChoice
 /// The player: a red ball you move around the dungeon.
 /// Carries the stats/combat rules from the original console game.
 /// </summary>
-public class Player
+public class Player : Entity
 {
     public const int MaxLevel = 10;
     public const int AttackCost = 2;
 
-    public string Name { get; }
     public PlayerClass Class { get; }
 
-    public int Level = 1;
     public int XP;
-    public int Health;
-    public int MaxHealth;
-    public int Attack;
     public int MaxStamina = 10;
     public float Stamina;
-
-    public Vector2 Position;
-    public float Radius = 16f;
-    public float Speed;
 
     public bool Guarding;
     public float AttackCooldownTimer;
@@ -67,6 +58,9 @@ public class Player
             PlayerClass.Wizard => 200f,
             _ => 250f,                   // Rogue, fastest
         };
+        Level = 1;
+        Radius = 16f;
+        BodyColor = Color.Red;
         Health = MaxHealth;
         Stamina = MaxStamina;
     }

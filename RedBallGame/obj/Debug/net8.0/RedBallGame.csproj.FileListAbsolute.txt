@@ -33,3 +33,4 @@
 /home/Jonjoe/Projects/testProj/RedBallGame/obj/Debug/net8.0/RedBallGame.pdb
 /home/Jonjoe/Projects/testProj/RedBallGame/obj/Debug/net8.0/RedBallGame.genruntimeconfig.cache
 /home/Jonjoe/Projects/testProj/RedBallGame/obj/Debug/net8.0/ref/RedBallGame.dll
+/home/Jonjoe/Projects/testProj/RedBallGame/obj/Debug/net8.0/RedBallGame.sourcelink.json

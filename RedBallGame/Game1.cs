@@ -291,11 +291,10 @@ public class Game1 : Game
                     m.IsWindingUp = false;
                     int damage = (int)(m.Attack * 1.5);
                     if (_player.Guarding) damage /= 2;
-                    _player.Health -= damage;
+                    ApplyDamage(_player, damage, HpColor);
                     AddMessage(_player.Guarding
                         ? $"{m.Name} smashes into your guard for {damage} damage!"
                         : $"{m.Name} lands a devastating blow for {damage} damage!");
-                    SpawnFloat($"-{damage}", _player.Position + new Vector2(0, -_player.Radius - 6), HpColor);
                     m.AttackCooldown = Monster.AttackInterval;
                 }
                 continue;
@@ -326,15 +325,14 @@ public class Game1 : Game
         float missChance = _player.Guarding ? 0.5f : 0.2f;
         if (_random.NextDouble() < missChance)
         {
-            AddMessage($"{m.Name} attacks and misses!");
+            ReportMiss(m);
             m.AttackCooldown = Monster.AttackInterval;
             return;
         }
 
-        int damage = _random.Next(1, m.Attack + 1);
-        _player.Health -= damage;
+        int damage = RollDamage(m.Attack);
+        ApplyDamage(_player, damage, HpColor);
         AddMessage($"{m.Name} attacks for {damage} damage!");
-        SpawnFloat($"-{damage}", _player.Position + new Vector2(0, -_player.Radius - 6), HpColor);
         m.AttackCooldown = Monster.AttackInterval;
     }
 
@@ -373,14 +371,13 @@ public class Game1 : Game
 
         if (_random.NextDouble() < 0.2)
         {
-            AddMessage($"{_player.Name} attacks and misses!");
+            ReportMiss(_player);
             return;
         }
 
-        int damage = _random.Next(1, _player.Attack + 1);
-        m.Health -= damage;
+        int damage = RollDamage(_player.Attack);
+        ApplyDamage(m, damage, TextColor);
         m.HitFlash = 0.12f;
-        SpawnFloat($"-{damage}", m.Position + new Vector2(0, -m.Radius - 6), TextColor);
 
         if (m.IsWindingUp)
         {
@@ -565,10 +562,10 @@ public class Game1 : Game
 
     private void DrawMonster(GameTime gameTime, Monster m)
     {
-        var bodyColor = m.Color;
+        var bodyColor = m.BodyColor;
         if (m.HitFlash > 0)
         {
-            bodyColor = Color.Lerp(m.Color, Color.White, m.HitFlash / 0.12f);
+            bodyColor = Color.Lerp(m.BodyColor, Color.White, m.HitFlash / 0.12f);
         }
         else if (m.IsWindingUp)
         {
@@ -577,8 +574,7 @@ public class Game1 : Game
                 : Color.White;
         }
 
-        DrawCircle(m.Position, m.Radius, bodyColor);
-        DrawEyes(m.Position, m.Radius);
+        DrawEntityBody(m, bodyColor);
 
         float barWidth = m.Radius * 2 + 12;
         DrawBar(
@@ -596,8 +592,7 @@ public class Game1 : Game
 
     private void DrawPlayer()
     {
-        DrawCircle(_player.Position, _player.Radius, Color.Red);
-        DrawEyes(_player.Position, _player.Radius);
+        DrawEntityBody(_player);
 
         if (_player.Guarding)
         {
@@ -705,6 +700,12 @@ public class Game1 : Game
         DrawCircle(pos + new Vector2(dx, -dy), eyeRadius, Color.White);
     }
 
+    private void DrawEntityBody(Entity e, Color? color = null)
+    {
+        DrawCircle(e.Position, e.Radius, color ?? e.BodyColor);
+        DrawEyes(e.Position, e.Radius);
+    }
+
     private void DrawBar(Rectangle bounds, int current, int max, Color fill, Color background)
     {
         DrawRect(bounds, background);
@@ -750,6 +751,17 @@ public class Game1 : Game
     private void SpawnFloat(string text, Vector2 pos, Color color)
     {
         _floats.Add(new FloatingText { Text = text, Position = pos, Age = 0, Color = color });
+    }
+
+    private int RollDamage(int attack) => _random.Next(1, attack + 1);
+
+    private void ReportMiss(Entity attacker) =>
+        AddMessage($"{attacker.Name} attacks and misses!");
+
+    private void ApplyDamage(Entity target, int damage, Color color)
+    {
+        target.Health -= damage;
+        SpawnFloat($"-{damage}", target.Position + new Vector2(0, -target.Radius - 6), color);
     }
 
     private void UpdateFloats(float dt)

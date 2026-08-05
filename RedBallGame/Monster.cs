@@ -15,26 +15,17 @@ public enum MonsterKind
 /// when you get close, attacks on a cooldown, and occasionally telegraphs a
 /// wind-up heavy attack that you can interrupt by attacking it.
 /// </summary>
-public class Monster
+public class Monster : Entity
 {
     public const float AttackInterval = 1.1f;
     public const float WindUpDuration = 0.9f;
     public const float AggroRange = 400f;
     public const int MaxMonsterLevel = 10;
 
-    public string Name { get; }
     public MonsterKind Kind { get; }
-    public int Level { get; }
-    public int Health { get; set; }
-    public int MaxHealth { get; }
-    public int Attack { get; }
     public int XpValue { get; }
-    public float Radius { get; }
-    public float Speed { get; }
-    public Color Color { get; }
     public Color WindUpColor { get; }
 
-    public Vector2 Position;
     public bool Chasing;
     public bool IsWindingUp;
     public float WindUpTimer;
@@ -53,7 +44,7 @@ public class Monster
         XpValue = xp;
         Radius = radius;
         Speed = speed;
-        Color = color;
+        BodyColor = color;
         WindUpColor = Color.Lerp(color, Color.White, 0.75f);
         AttackCooldown = 0.8f;
     }
