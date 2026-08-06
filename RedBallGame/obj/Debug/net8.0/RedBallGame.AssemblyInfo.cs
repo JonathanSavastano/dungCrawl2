@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("RedBallGame")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2c82b3fcda0bb76385cb281a903281f561d961fe")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+96fd5430687f188310bbbcb23d7e6deebbf7a125")]
 [assembly: System.Reflection.AssemblyProductAttribute("RedBallGame")]
 [assembly: System.Reflection.AssemblyTitleAttribute("RedBallGame")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

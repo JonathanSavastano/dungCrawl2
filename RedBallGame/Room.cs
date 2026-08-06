@@ -138,6 +138,7 @@ public class Room
     private const int WallInset = 80;             // clearance kept from the room borders
     private const int WallPlacementAttempts = 24; // tries per wall before giving up
     private const int MinWallSpacing = 60;        // gap kept between two unconnected walls
+    private const int EntryClearance = 64;        // clear strip in front of each exit = 2x player diameter (radius 16)
 
     /// <summary>Which end of a wall hangs free (the other end is attached to
     /// the perimeter or another wall), so clearance can shrink that end.</summary>
@@ -180,6 +181,7 @@ public class Room
 
         if (branch && !InsideInterior(candidate.Rect)) return null;
         if (OverlapsExit(candidate.Rect, exits)) return null;
+        if (OverlapsEntry(candidate.Rect, exits)) return null;
         if (protectSpawn && OverlapsSpawnZone(candidate.Rect)) return null;
 
         int minLength = branch ? MinBranchLength : MinPerimeterWallLength;
@@ -254,6 +256,38 @@ public class Room
         foreach (var d in exits)
         {
             if (inflated.Intersects(GetExitRect(d))) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// A clear strip just inside each exit, as wide as the gap and two player
+    /// diameters deep. Without it a wall (usually a branch hanging off another
+    /// wall) could hug the doorway and leave less than a player's width of
+    /// space, so entering wedged the ball against it and stuck.
+    /// </summary>
+    private static Rectangle GetEntryCorridor(Direction d)
+    {
+        int w = GameConfig.WallThickness;
+        int half = GameConfig.ExitWidth / 2;
+        int cx = GameConfig.ScreenWidth / 2;
+        int cy = GameConfig.ScreenHeight / 2;
+
+        return d switch
+        {
+            Direction.Up => new Rectangle(cx - half, w, GameConfig.ExitWidth, EntryClearance),
+            Direction.Down => new Rectangle(cx - half, GameConfig.ScreenHeight - w - EntryClearance, GameConfig.ExitWidth, EntryClearance),
+            Direction.Left => new Rectangle(w, cy - half, EntryClearance, GameConfig.ExitWidth),
+            _ => new Rectangle(GameConfig.ScreenWidth - w - EntryClearance, cy - half, EntryClearance, GameConfig.ExitWidth),
+        };
+    }
+
+    /// <summary>Walls must not crowd the strip in front of any exit.</summary>
+    private static bool OverlapsEntry(Rectangle candidate, IReadOnlyCollection<Direction> exits)
+    {
+        foreach (var d in exits)
+        {
+            if (candidate.Intersects(GetEntryCorridor(d))) return true;
         }
         return false;
     }
