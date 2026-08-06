@@ -216,34 +216,42 @@ public class Game1 : Game
         if (kb.IsKeyDown(Keys.D) || kb.IsKeyDown(Keys.Right)) direction.X += 1;
         if (direction != Vector2.Zero) direction.Normalize();
 
-        float x = _player.Position.X + direction.X * _player.Speed * dt;
-        float y = _player.Position.Y + direction.Y * _player.Speed * dt;
-        float r = _player.Radius;
-        int w = GameConfig.WallThickness;
-
-        if (x - r < w && !CanPassThrough(Direction.Left, y))
-            x = w + r;
-        else if (x + r > GameConfig.ScreenWidth - w && !CanPassThrough(Direction.Right, y))
-            x = GameConfig.ScreenWidth - w - r;
-
-        if (y - r < w && !CanPassThrough(Direction.Up, x))
-            y = w + r;
-        else if (y + r > GameConfig.ScreenHeight - w && !CanPassThrough(Direction.Down, x))
-            y = GameConfig.ScreenHeight - w - r;
-
-        _player.Position = new Vector2(x, y);
+        MoveEntity(_player, direction, _player.Speed * dt);
     }
 
-    private bool CanPassThrough(Direction d, float alongWall)
+    /// <summary>
+    /// Moves an entity in the given direction, stopping on any solid wall
+    /// (perimeter or interior). Axes are moved separately so the ball slides
+    /// along walls instead of snagging on corners, and exit gaps stay passable
+    /// because the perimeter has openings cut out of it there.
+    /// </summary>
+    private void MoveEntity(Entity e, Vector2 direction, float distance)
     {
-        if (!_room.HasExit(d)) return false;
+        var pos = e.Position;
+        var step = direction * distance;
 
-        var gap = Room.GetExitRect(d);
-        float r = _player.Radius;
+        float x = pos.X + step.X;
+        if (!CircleCollides(new Vector2(x, pos.Y), e.Radius)) pos.X = x;
 
-        return d is Direction.Left or Direction.Right
-            ? alongWall + r > gap.Y && alongWall - r < gap.Bottom
-            : alongWall + r > gap.X && alongWall - r < gap.Right;
+        float y = pos.Y + step.Y;
+        if (!CircleCollides(new Vector2(pos.X, y), e.Radius)) pos.Y = y;
+
+        e.Position = pos;
+    }
+
+    /// <summary>True if a circle centred at <paramref name="center"/> overlaps
+    /// any solid wall in the current room.</summary>
+    private bool CircleCollides(Vector2 center, float radius)
+    {
+        foreach (var wall in _room.SolidWalls)
+        {
+            float nearestX = Math.Clamp(center.X, wall.X, wall.Right);
+            float nearestY = Math.Clamp(center.Y, wall.Y, wall.Bottom);
+            float dx = center.X - nearestX;
+            float dy = center.Y - nearestY;
+            if (dx * dx + dy * dy < radius * radius) return true;
+        }
+        return false;
     }
 
     private void UpdateMonster(float dt)
@@ -279,7 +287,7 @@ public class Game1 : Game
             if (dist > attackRange)
             {
                 var dir = Vector2.Normalize(_player.Position - m.Position);
-                m.Position = ClampToInterior(m.Position + dir * m.Speed * dt, m.Radius);
+                MoveEntity(m, dir, m.Speed * dt);
                 dist = Vector2.Distance(m.Position, _player.Position);
             }
 
@@ -499,10 +507,24 @@ public class Game1 : Game
                 _random.Next(w + 40, GameConfig.ScreenWidth - w - 40),
                 _random.Next(w + 40, GameConfig.ScreenHeight - w - 40));
             if (Vector2.Distance(pos, _player.Position) >= minDistFromPlayer &&
-                occupied.All(o => Vector2.Distance(pos, o) >= 60f))
+                occupied.All(o => Vector2.Distance(pos, o) >= 60f) &&
+                !CircleCollides(pos, 36f))
             {
                 return pos;
             }
+        }
+
+        // Last resort: scan a few fixed spots for one that isn't inside a wall.
+        var fallbacks = new[]
+        {
+            new Vector2(w + 80, GameConfig.ScreenHeight - w - 80),
+            new Vector2(GameConfig.ScreenWidth / 2f, GameConfig.ScreenHeight - w - 80),
+            new Vector2(GameConfig.ScreenWidth - w - 80, GameConfig.ScreenHeight - w - 80),
+            new Vector2(GameConfig.ScreenWidth / 2f, GameConfig.ScreenHeight / 2f),
+        };
+        foreach (var pos in fallbacks)
+        {
+            if (!CircleCollides(pos, 36f)) return pos;
         }
         return new Vector2(GameConfig.ScreenWidth / 2f, GameConfig.ScreenHeight - w - 60);
     }
@@ -511,31 +533,9 @@ public class Game1 : Game
 
     private void DrawWalls()
     {
-        int w = GameConfig.WallThickness;
-
-        foreach (var d in GameConfig.AllDirections)
+        foreach (var wall in _room.SolidWalls)
         {
-            var gap = _room.HasExit(d) ? Room.GetExitRect(d) : Rectangle.Empty;
-
-            switch (d)
-            {
-                case Direction.Up:
-                    DrawRect(0, 0, gap.X, w, WallColor);
-                    DrawRect(gap.Right, 0, GameConfig.ScreenWidth - gap.Right, w, WallColor);
-                    break;
-                case Direction.Down:
-                    DrawRect(0, GameConfig.ScreenHeight - w, gap.X, w, WallColor);
-                    DrawRect(gap.Right, GameConfig.ScreenHeight - w, GameConfig.ScreenWidth - gap.Right, w, WallColor);
-                    break;
-                case Direction.Left:
-                    DrawRect(0, 0, w, gap.Y, WallColor);
-                    DrawRect(0, gap.Bottom, w, GameConfig.ScreenHeight - gap.Bottom, WallColor);
-                    break;
-                default:
-                    DrawRect(GameConfig.ScreenWidth - w, 0, w, gap.Y, WallColor);
-                    DrawRect(GameConfig.ScreenWidth - w, gap.Bottom, w, GameConfig.ScreenHeight - gap.Bottom, WallColor);
-                    break;
-            }
+            DrawRect(wall, WallColor);
         }
     }
 
@@ -733,14 +733,6 @@ public class Game1 : Game
         _spriteBatch.Draw(_pixel, new Rectangle(x, y, width, height), color);
 
     // --------------------------------------------------------------- helpers
-
-    private static Vector2 ClampToInterior(Vector2 pos, float radius)
-    {
-        int w = GameConfig.WallThickness;
-        return new Vector2(
-            Math.Clamp(pos.X, w + radius, GameConfig.ScreenWidth - w - radius),
-            Math.Clamp(pos.Y, w + radius, GameConfig.ScreenHeight - w - radius));
-    }
 
     private void AddMessage(string message)
     {
