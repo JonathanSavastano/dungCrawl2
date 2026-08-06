@@ -42,6 +42,10 @@ public class Game1 : Game
     private readonly List<Monster> _monsters = new();
     private readonly List<Vector2> _drops = new();
 
+    private RoomMemory _currentRoomMem = null!;
+    private readonly List<RoomMemory> _rememberedRooms = new(2);
+    private long _roomVisitCounter;
+
     private GameState _state = GameState.ClassSelect;
     private int _roomNumber;
     private int _monstersSlain;
@@ -57,6 +61,21 @@ public class Game1 : Game
         public Vector2 Position;
         public float Age;
         public Color Color;
+    }
+
+    /// <summary>
+    /// A room the player can step back into. <see cref="Doors"/> maps each
+    /// exit of <see cref="Room"/> to the remembered room behind it, filled in
+    /// only when the player actually walks through that exit, so going back
+    /// through a used door always returns the exact room that was left.
+    /// </summary>
+    private sealed class RoomMemory
+    {
+        public Room Room = null!;
+        public readonly List<Monster> Monsters = new();
+        public readonly List<Vector2> Drops = new();
+        public readonly Dictionary<Direction, RoomMemory> Doors = new();
+        public long LastVisited;
     }
 
     public Game1()
@@ -171,6 +190,9 @@ public class Game1 : Game
         _messages.Clear();
         _floats.Clear();
         _prevAttackDown = false;
+        _currentRoomMem = null!;
+        _rememberedRooms.Clear();
+        _roomVisitCounter = 0;
         EnterRoom(null);
         _state = GameState.Playing;
     }
@@ -457,13 +479,40 @@ public class Game1 : Game
 
     private void EnterRoom(Direction? enteredFrom)
     {
-        _room = Room.GenerateRandom(_random, enteredFrom);
         _roomNumber++;
+
+        bool reused = false;
+        RoomMemory next;
+        if (enteredFrom.HasValue && _currentRoomMem != null)
+        {
+            Direction via = enteredFrom.Value;
+            SaveRoomContents(_currentRoomMem);
+
+            if (_currentRoomMem.Doors.ContainsKey(via))
+            {
+                next = _currentRoomMem.Doors[via];
+                reused = true;
+                _rememberedRooms.Remove(next);
+            }
+            else
+            {
+                next = new RoomMemory { Room = Room.GenerateRandom(_random, via) };
+            }
+
+            _currentRoomMem.Doors[via] = next;
+            next.Doors[GameConfig.Opposite(via)] = _currentRoomMem;
+            AddRemembered(_currentRoomMem);
+        }
+        else
+        {
+            next = new RoomMemory { Room = Room.GenerateRandom(_random, enteredFrom) };
+        }
+
+        _room = next.Room;
+        _currentRoomMem = next;
+        next.LastVisited = ++_roomVisitCounter;
         _player.Stamina = _player.MaxStamina;
-        _drops.Clear();
-        _monsters.Clear();
         _floats.Clear();
-        AddMessage($"--- Room {_roomNumber} ---");
 
         if (enteredFrom.HasValue)
         {
@@ -474,28 +523,80 @@ public class Game1 : Game
             _player.Position = new Vector2(GameConfig.ScreenWidth / 2f, GameConfig.ScreenHeight / 2f);
         }
 
-        if (_random.NextDouble() < 0.45)
+        RestoreRoomContents(next);
+
+        AddMessage($"--- Room {_roomNumber} ---");
+        if (reused)
         {
-            int count = _random.Next(1, 4); // 1-3 enemies
-            for (int i = 0; i < count; i++)
-            {
-                var m = Monster.CreateRandom(_random, _player.Level);
-                m.Position = FindSpawnPoint(90f, _monsters.Select(x => x.Position));
-                _monsters.Add(m);
-                AddMessage($"A {m.Name} the {m.Kind} (LV {m.Level}) blocks your way!");
-            }
-        }
-        else if (_random.NextDouble() < 0.35)
-        {
-            _drops.Add(FindSpawnPoint(50f, Enumerable.Empty<Vector2>()));
-            AddMessage("You spot a glowing potion!");
+            AddMessage("You step back into the room you came from.");
         }
         else
         {
-            AddMessage("The room is empty, save for the dust in the air.");
+            _monsters.Clear();
+            _drops.Clear();
+
+            if (_random.NextDouble() < 0.45)
+            {
+                int count = _random.Next(1, 4); // 1-3 enemies
+                for (int i = 0; i < count; i++)
+                {
+                    var m = Monster.CreateRandom(_random, _player.Level);
+                    m.Position = FindSpawnPoint(90f, _monsters.Select(x => x.Position));
+                    _monsters.Add(m);
+                    AddMessage($"A {m.Name} the {m.Kind} (LV {m.Level}) blocks your way!");
+                }
+            }
+            else if (_random.NextDouble() < 0.35)
+            {
+                _drops.Add(FindSpawnPoint(50f, Enumerable.Empty<Vector2>()));
+                AddMessage("You spot a glowing potion!");
+            }
+            else
+            {
+                AddMessage("The room is empty, save for the dust in the air.");
+            }
         }
 
         UpdateTitle();
+    }
+
+    private void SaveRoomContents(RoomMemory mem)
+    {
+        mem.Monsters.Clear();
+        mem.Monsters.AddRange(_monsters);
+        mem.Drops.Clear();
+        mem.Drops.AddRange(_drops);
+    }
+
+    private void RestoreRoomContents(RoomMemory mem)
+    {
+        _monsters.Clear();
+        _monsters.AddRange(mem.Monsters);
+        _drops.Clear();
+        _drops.AddRange(mem.Drops);
+    }
+
+    private void AddRemembered(RoomMemory mem)
+    {
+        _rememberedRooms.Remove(mem);
+        _rememberedRooms.Add(mem);
+        while (_rememberedRooms.Count > 2)
+        {
+            EvictRoom(_rememberedRooms.OrderBy(r => r.LastVisited).First());
+        }
+    }
+
+    private void EvictRoom(RoomMemory victim)
+    {
+        foreach (var mem in _rememberedRooms.Concat(new[] { _currentRoomMem }))
+        {
+            foreach (var door in mem.Doors.Keys.ToList())
+            {
+                if (ReferenceEquals(mem.Doors[door], victim)) mem.Doors.Remove(door);
+            }
+        }
+        victim.Doors.Clear();
+        _rememberedRooms.Remove(victim);
     }
 
     private Vector2 FindSpawnPoint(float minDistFromPlayer, IEnumerable<Vector2> occupied)
